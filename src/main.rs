@@ -88,7 +88,7 @@ struct JackInterfaceState {
     alive: AtomicBool,
 }
 
-// We need to Arc it because, well, lifetimes...
+// We need to Arc it because it's shared between thread, obviously
 #[derive(Clone)]
 struct JackInterface(Arc<JackInterfaceState>);
 
