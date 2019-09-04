@@ -26,6 +26,7 @@ use std::{
 const CLIENT_NAME: &'static str = "dbmeter";
 const PORT_NAME: &'static str = "in";
 
+
 // This struct is shared between JACK threads and the rest of the world...
 struct JackState {
     // Access to our input audio port
@@ -40,7 +41,7 @@ struct JackState {
 
 // ...so we must Arc it before implementing handler traits on it and sending it
 // to JACK. Furthermore, current coherence rules force us to newtype the Arc
-// before we can implement the XyzHandler traits on it.
+// before we can implement the foreign XyzHandler traits on it.
 #[derive(Clone)]
 struct JackHandler(Arc<JackState>);
 
@@ -53,11 +54,12 @@ pub struct JackInterface {
     _async_client: AsyncClient<JackHandler, JackHandler>,
 }
 
-// Public interface to the JACK audio processing machinery
+
+// Publicly exposed interface to the JACK audio processing machinery
 //
-// NOTE: Every public query function other than is_alive() should feature a
-//       debug assertion that the audio thread is still alive, as a debugging
-//       aid for ill-behaved clients that forget to check it.
+// NOTE: Every accessor other than is_alive() should feature a debug assertion
+//       that the audio thread is still alive. This is a debugging aid for
+//       ill-behaved clients that forget to check it.
 //
 impl JackInterface {
     // Set up JACK-based audio processing
@@ -100,16 +102,20 @@ impl JackInterface {
             client.register_port(PORT_NAME, AudioIn)
                   .expect("Failed to register input port");
 
-        // Start the audio thread
+        // Setup shared state between JACK threads and rest of the application
         let handler = JackHandler(Arc::new(JackState {
             input_port,
             alive: AtomicBool::new(true),
             next_time: AtomicU64::new(::jack::get_time())
         }));
+
+        // Start JACK
         let _async_client = client.activate_async(
             handler.clone(),
             handler.clone(),
         ).expect("Failed to activate client");
+
+        // Return interface / RAII struct
         Self {
             handler,
             _async_client,
