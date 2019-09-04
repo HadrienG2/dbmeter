@@ -124,8 +124,8 @@ impl JackInterface {
     {
         if !self.is_alive() { return Control::Quit; }
         let result = panic::catch_unwind(callback);
-        // FIXME: Store error somewhere so it can be processed, an AtomicPtr
-        //        could do the trick and be async signal safe.
+        // FIXME: Store error somewhere so it can be processed, something based
+        //        on AtomicPtr could do the trick and be async signal safe.
         let output = result.unwrap_or(Control::Quit);
         if output == Control::Quit { self.mark_dead(); }
         output
@@ -202,4 +202,10 @@ impl NotificationHandler for JackInterface {
             unimplemented!()
         })
     }
+
+    // NOTE: We probably don't need to monitor client registration, port
+    //       registration/renaming/connection, and graph reordering.
+    //
+    //       The JACK docs also tell us that as a single-input application, we
+    //       do not need a latency update callback.
 }
