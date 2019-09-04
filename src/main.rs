@@ -200,10 +200,13 @@ impl NotificationHandler for JackInterface {
     //          many libc functions cannot be called, and garbage data can be
     //          seen. This function actually shouldn't be marked as safe.
     //
-    fn shutdown(&mut self, _status: ClientStatus, _reason: &str) {
+    fn shutdown(&mut self, status: ClientStatus, reason: &str) {
         self.callback_guard(|| {
             // FIXME: Find a way to communicate "status" and "reason" without
-            //        calling signal-unsafe functions like malloc or println
+            //        calling signal-unsafe functions like malloc or println,
+            //        maybe RT-safe logging will also save us here?
+            eprintln!("JACK is shutting us down with status {:?} ({})",
+                      status, reason);
             Control::Quit
         });
     }
