@@ -157,9 +157,11 @@ impl NotificationHandler for JackInterface {
     }
 
     // Hook to handle JACK server shutting down our audio thread
+    //
     // WARNING: In the JACK devs' words, this is like a POSIX signal handler. So
     //          many libc functions cannot be called, and garbage data can be
     //          seen. This function actually shouldn't be marked as safe.
+    //
     fn shutdown(&mut self, _status: ClientStatus, _reason: &str) {
         self.callback_guard(|| {
             // FIXME: Find a way to communicate "status" and "reason" without
@@ -174,7 +176,8 @@ impl NotificationHandler for JackInterface {
     //
     // 1. Commit to either the JACK clock or system clock, and never mix them
     // 2. Never buffer data based on a system time interval, as that would
-    //    require storing an unbounded amount of audio frames.
+    //    require storing an unbounded amount of audio frames. This is an
+    //    argument in favor of choosing the JACK clock.
     //
     fn freewheel(&mut self, _: &Client, is_freewheel_enabled: bool) {
         self.callback_guard(|| {
@@ -210,9 +213,11 @@ impl NotificationHandler for JackInterface {
     // Hook to handle audio data loss due to buffer under- or over-run
     fn xrun(&mut self, _: &Client) -> Control {
         self.callback_guard(|| {
-            // FIXME: Support xrun notifications properly
-            eprintln!("An x-run has occured, OH NOES WE FAILED REALTIME!!!");
-            unimplemented!()
+            eprintln!();
+            eprintln!("Audio data was dropped. This should never happen!");
+            eprintln!("Either JACK is misconfigured, or our code is wrong.");
+            eprintln!("If other JACK apps work for you, please file a bug.");
+            Control::Continue
         })
     }
 
