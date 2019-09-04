@@ -9,12 +9,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "dbmeter"
 version = "0.1.0"
 dependencies = [
- "jack 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jack 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "jack"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -74,7 +74,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [metadata]
 "checksum bitflags 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3d155346769a6855b86399e9bc3814ab343cd3d62c7e985113d46a0ec3c281fd"
-"checksum jack 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)" = "064b66c901bbbfd8f991e8c5923376f52cf832115aaf77ae97173c4bbc33274e"
+"checksum jack 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)" = "362625cb4c00a647923e9559699e811f2f4d5de750c5a92476608ecaee0f89ee"
 "checksum jack-sys 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c0d4ca501477fd3cd93a36df581046e5d6338ed826cf7e9b8d302603521e6cc3"
 "checksum kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 "checksum lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"

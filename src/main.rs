@@ -124,6 +124,8 @@ impl JackInterface {
     {
         if !self.is_alive() { return Control::Quit; }
         let result = panic::catch_unwind(callback);
+        // FIXME: Store error somewhere so it can be processed, an AtomicPtr
+        //        could do the trick and be async signal safe.
         let output = result.unwrap_or(Control::Quit);
         if output == Control::Quit { self.mark_dead(); }
         output
@@ -144,10 +146,10 @@ impl ProcessHandler for JackInterface {
 }
 
 impl NotificationHandler for JackInterface {
-    // Hook to do initialization before audio thread starts
+    // Hook to do initialization before an audio thread starts
     fn thread_init(&self, _: &Client) {
         self.callback_guard(|| {
-            println!("Audio thread is ready.");
+            println!("Audio thread {:?} is ready.", std::thread::current().id());
             Control::Continue
         });
     }
