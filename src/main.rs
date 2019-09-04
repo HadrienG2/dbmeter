@@ -24,6 +24,8 @@ const CLIENT_NAME: &'static str = "dbmeter";
 const PORT_NAME: &'static str = "in";
 
 
+// FIXME: Replace (e)println with logging
+
 fn main() {
     // Create a JACK client
     let (client, mut status) =
@@ -167,12 +169,23 @@ impl NotificationHandler for JackInterface {
     }
 
     // Hook to handle JACK going in and out of "freewheel" mode, where audio
-    // frames are just dumped in as quickly as possible
+    // frames are just dumped in as quickly as possible. To support it, we need
+    // to take the following precautions:
+    //
+    // 1. Commit to either the JACK clock or system clock, and never mix them
+    // 2. Never buffer data based on a system time interval, as that would
+    //    require storing an unbounded amount of audio frames.
+    //
     fn freewheel(&mut self, _: &Client, is_freewheel_enabled: bool) {
         self.callback_guard(|| {
-            // FIXME: Support freewheel mode properly
-            eprintln!("Freewheel mode new status: {}.", is_freewheel_enabled);
-            unimplemented!()
+            if is_freewheel_enabled {
+                eprint!("Entering freewheeling mode. ");
+                eprintln!("JACK clock may go much faster than real time!");
+            } else {
+                eprint!("Leaving freewheeling mode. ");
+                eprintln!("JACK clock will go back in sync with real time.");
+            }
+            Control::Continue
         });
     }
 
