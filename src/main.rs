@@ -9,13 +9,14 @@ use jack::{
     Port,
     ProcessHandler,
     ProcessScope,
+    Time,
 };
 
 use std::{
     panic,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
@@ -24,7 +25,7 @@ const CLIENT_NAME: &'static str = "dbmeter";
 const PORT_NAME: &'static str = "in";
 
 
-// FIXME: Replace (e)println with logging
+// FIXME: Replace (e)println with RT-safe logging
 
 fn main() {
     // Create a JACK client
@@ -73,6 +74,8 @@ fn main() {
 
     // TODO: Do graphics stuff
     std::thread::sleep_ms(1000);
+    eprintln!("Jack clock at end of last processed frame: {:?} µs",
+              jack_interface.next_time());
 
     // NOTE: This is how we propagate panics from the audio thread to other
     //       threads, please run this assertion regularly.
@@ -88,6 +91,9 @@ struct JackInterfaceState {
 
     // Truth that the audio thread is alive
     alive: AtomicBool,
+
+    // Jack clock timestamp as of the end of the last processed frame
+    next_time: AtomicU64,
 }
 
 // We need to Arc it because it's shared between thread, obviously
@@ -100,6 +106,7 @@ impl JackInterface {
         Self(Arc::new(JackInterfaceState {
             input_port,
             alive: AtomicBool::new(true),
+            next_time: AtomicU64::new(jack::get_time())
         }))
     }
 
@@ -116,6 +123,28 @@ impl JackInterface {
     // Mark the audio thread as dead
     fn mark_dead(&self) {
         self.0.alive.store(false, Ordering::Relaxed);
+    }
+
+    // Query JACK clock as of the end of the last processed audio frame
+    //
+    // Provides an Acquire barrier so that you can synchronize with any write
+    // made during the process() callback. Should be called first by clients.
+    //
+    fn next_time(&self) -> Time {
+        self.0.next_time.load(Ordering::Acquire)
+    }
+
+    // Update the JACK clock to account for newly processed frames
+    //
+    // Provides a Release barrier so that clients can synchronize with writes
+    // made during the process() callback. Should be called last by process().
+    //
+    fn update_time(&self, scope: &ProcessScope) {
+        let next_time =
+            scope.cycle_times()
+                 .expect("JACK API does not seem to support cycle timing")
+                 .next_usecs;
+        self.0.next_time.store(next_time, Ordering::Release);
     }
 
     // JACK callback wrapper that makes sure the audio thread honors its own
@@ -138,11 +167,15 @@ impl ProcessHandler for JackInterface {
     // Hook to process incoming audio data
     fn process(&mut self, _: &Client, scope: &ProcessScope) -> Control {
         self.callback_guard(|| {
+            // Fetch input frames
             let input = self.input_port().as_slice(scope);
 
             // FIXME: Do some actual audio processing
             std::mem::drop(input);
-            unimplemented!()
+
+            // Update client view of the JACK clock
+            self.update_time(scope);
+            Control::Continue
         })
     }
 }
@@ -182,11 +215,11 @@ impl NotificationHandler for JackInterface {
     fn freewheel(&mut self, _: &Client, is_freewheel_enabled: bool) {
         self.callback_guard(|| {
             if is_freewheel_enabled {
-                eprint!("Entering freewheeling mode. ");
-                eprintln!("JACK clock may go much faster than real time!");
+                print!("Entering freewheeling mode. ");
+                println!("JACK clock may go much faster than real time!");
             } else {
-                eprint!("Leaving freewheeling mode. ");
-                eprintln!("JACK clock will go back in sync with real time.");
+                print!("Leaving freewheeling mode. ");
+                println!("JACK clock will go back in sync with real time.");
             }
             Control::Continue
         });
