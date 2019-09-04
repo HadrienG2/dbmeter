@@ -1,4 +1,4 @@
-use jack::{
+use ::jack::{
     AudioIn,
     Client,
     ClientOptions,
@@ -58,7 +58,7 @@ fn main() {
     print!("Successfully initialized jack client \"{}\"! ", client.name());
     print!("Sample rate is {}, ", client.sample_rate());
     print!("buffer size is {}, ", client.buffer_size());
-    println!("initial frame time is {} µs.", jack::get_time());
+    println!("initial frame time is {} µs.", ::jack::get_time());
 
     // Register an audio input
     let input_port =
@@ -66,7 +66,7 @@ fn main() {
               .expect("Failed to register input port");
 
     // Start the audio thread
-    let jack_interface = JackInterface::new(input_port);
+    let jack_interface = JackHandler::new(input_port);
     let _async_client = client.activate_async(
         jack_interface.clone(),
         jack_interface.clone(),
@@ -84,7 +84,7 @@ fn main() {
 
 // This shared struct received the callbacks from JACK and will be used by other
 // threads to query the status of the audio thread.
-struct JackInterfaceState {
+struct JackState {
     // Access to our input audio port
     input_port: Port<AudioIn>,
 
@@ -97,18 +97,18 @@ struct JackInterfaceState {
 
 // We need to Arc it because it's shared between thread, obviously
 #[derive(Clone)]
-struct JackInterface(Arc<JackInterfaceState>);
+struct JackHandler(Arc<JackState>);
 
 // NOTE: Every public interface function other than is_alive() should feature a
 //       debug assertion that the audio thread is still alive, as a debugging
 //       aid for ill-behaved clients that forget to check it.
-impl JackInterface {
+impl JackHandler {
     // Prepare for communication between audio thread and the rest of the world
     fn new(input_port: Port<AudioIn>) -> Self {
-        Self(Arc::new(JackInterfaceState {
+        Self(Arc::new(JackState {
             input_port,
             alive: AtomicBool::new(true),
-            next_time: AtomicU64::new(jack::get_time())
+            next_time: AtomicU64::new(::jack::get_time())
         }))
     }
 
@@ -167,7 +167,7 @@ impl JackInterface {
     }
 }
 
-impl ProcessHandler for JackInterface {
+impl ProcessHandler for JackHandler {
     // Hook to process incoming audio data
     fn process(&mut self, _: &Client, scope: &ProcessScope) -> Control {
         self.callback_guard(|| {
@@ -184,7 +184,7 @@ impl ProcessHandler for JackInterface {
     }
 }
 
-impl NotificationHandler for JackInterface {
+impl NotificationHandler for JackHandler {
     // Hook to do initialization before an audio thread starts
     fn thread_init(&self, _: &Client) {
         self.callback_guard(|| {
