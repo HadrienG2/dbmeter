@@ -15,7 +15,7 @@ fn main() {
 
     // TODO: Display Real Pretty graphics, not console prints
     loop {
-        std::thread::sleep_ms(100);
+        std::thread::sleep(std::time::Duration::from_millis(300));
         assert!(jack_interface.is_alive(), "Audio thread has died");
         eprintln!("Audio peak during last period: {} dBFS",
                   jack_interface.read_and_reset_peak());

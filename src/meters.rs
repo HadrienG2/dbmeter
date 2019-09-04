@@ -69,8 +69,8 @@ pub struct VUMeter {
     // Current VU value, as an FP sample
     vu_sample: Atomic<Sample>,
 
-    // Weight of newly inserted samples
-    new_sample_weight: Atomic<f32>,
+    // Weight of old VU vs new samples
+    vu_weight: Atomic<f32>,
 }
 
 impl VUMeter {
@@ -78,14 +78,12 @@ impl VUMeter {
     pub fn new(sampling_rate: u32) -> Self {
         Self {
             vu_sample: Atomic::new(0.0),
-            new_sample_weight: Atomic::new(
-                Self::new_sample_weight(sampling_rate)
-            ),
+            vu_weight: Atomic::new(Self::vu_weight(sampling_rate)),
         }
     }
 
-    // Compute the new sample weight for a given sampling rate
-    fn new_sample_weight(sampling_rate: u32) -> f32 {
+    // Compute the VU weight for a given sampling rate
+    fn vu_weight(sampling_rate: u32) -> f32 {
         // So, we have sample ~ a x sin(... x t), for every new sample we do...
         //
         //     corr_spl = corr x |sample|
@@ -117,8 +115,7 @@ impl VUMeter {
     // Update the sampling rate, please remember to call this if your audio
     // API allows changing the sampling rate in the middle of an audio stream.
     pub fn update_sampling_rate(&self, sampling_rate: u32) {
-        self.new_sample_weight.store(Self::new_sample_weight(sampling_rate),
-                                     Ordering::Relaxed);
+        self.vu_weight.store(Self::vu_weight(sampling_rate), Ordering::Relaxed);
     }
 
     // Feed samples into the API
@@ -130,13 +127,13 @@ impl VUMeter {
         let data_iter = data.into_iter();
         let mut old_vu = self.vu_sample.load(Ordering::Relaxed);
         loop {
-            let new_weight =
-                self.new_sample_weight.load(Ordering::Relaxed);
+            let vu_weight =
+                self.vu_weight.load(Ordering::Relaxed);
             let new_vu =
                 data_iter.clone()
                          .map(|spl| spl.abs() * AMPLITUDE_CORRECTION)
                          .fold(old_vu, |vu, spl| {
-                             spl + (vu - spl) * new_weight
+                             spl + (vu - spl) * vu_weight
                          });
             match self.vu_sample.compare_exchange(old_vu,
                                                   new_vu,
