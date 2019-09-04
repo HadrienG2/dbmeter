@@ -103,13 +103,13 @@ impl VUMeter {
         // rate. So for a given sampling rate, we can hardcode the value of this
         // exponential as "weight" and do just on every sample...
         //
-        //     VU_new = (1 - weight) * VU_old + weight * VU_new
+        //     VU_new = corr_spl + (VU_old - corr_spl) * weight
         //
         // That's awesome! Let's do it then.
         //
         const RISE_TIME: f32 = 0.3;
         const RISE_PRECISION: f32 = 0.01;
-        let tau = RISE_TIME / RISE_PRECISION.ln();
+        let tau = -RISE_TIME / RISE_PRECISION.ln();
         let dt = 1.0 / (sampling_rate as f32);
         (-dt/tau).exp()
     }
