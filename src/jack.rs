@@ -1,3 +1,8 @@
+use crate::{
+    Decibel,
+    meters::{SamplePeakMeter, VUMeter},
+};
+
 use ::jack::{
     AsyncClient,
     AudioIn,
@@ -29,14 +34,20 @@ const PORT_NAME: &'static str = "in";
 
 // This struct is shared between JACK threads and the rest of the world...
 struct JackState {
-    // Access to our input audio port
-    input_port: Port<AudioIn>,
-
     // Truth that the audio thread is alive
     alive: AtomicBool,
 
+    // Access to the audio input port
+    input_port: Port<AudioIn>,
+
     // Jack clock timestamp as of the end of the last processed frame
     next_time: AtomicU64,
+
+    // Peak metering
+    peak_meter: SamplePeakMeter,
+
+    // Loudness metering
+    loud_meter: VUMeter,
 }
 
 // ...so we must Arc it before implementing handler traits on it and sending it
@@ -104,9 +115,11 @@ impl JackInterface {
 
         // Setup shared state between JACK threads and rest of the application
         let handler = JackHandler(Arc::new(JackState {
-            input_port,
             alive: AtomicBool::new(true),
-            next_time: AtomicU64::new(::jack::get_time())
+            input_port,
+            next_time: AtomicU64::new(::jack::get_time()),
+            peak_meter: SamplePeakMeter::new(),
+            loud_meter: VUMeter::new(client.sample_rate() as u32),
         }));
 
         // Start JACK
@@ -135,6 +148,18 @@ impl JackInterface {
     pub fn next_time(&self) -> Time {
         debug_assert!(self.is_alive(), "Audio thread has died.");
         self.handler.next_time()
+    }
+
+    // Query the peak meter for its current dBFS value and reset it
+    pub fn read_and_reset_peak(&self) -> Decibel {
+        debug_assert!(self.is_alive(), "Audio thread has died.");
+        self.handler.0.peak_meter.read_and_reset()
+    }
+
+    // Query the VU-meter for its current VUFS value
+    pub fn read_loudness(&self) -> Decibel {
+        debug_assert!(self.is_alive(), "Audio thread has died.");
+        self.handler.0.loud_meter.read()
     }
 }
 
@@ -195,8 +220,9 @@ impl ProcessHandler for JackHandler {
             // Fetch input frames
             let input = self.0.input_port.as_slice(scope);
 
-            // FIXME: Do some actual audio processing
-            std::mem::drop(input);
+            // Update meters with the new audio samples
+            self.0.peak_meter.integrate(input.iter().copied());
+            self.0.loud_meter.integrate(input.iter().copied());
 
             // Update client view of the JACK clock
             self.update_time(scope);
@@ -257,18 +283,20 @@ impl NotificationHandler for JackHandler {
     // Hook to handle JACK buffer size changes
     fn buffer_size(&mut self, _: &Client, size: Frames) -> Control {
         self.callback_guard(|| {
-            // FIXME: Support buffer size changes properly
             eprintln!("Buffer size is now: {}", size);
-            unimplemented!()
+            // NOTE: SamplePeakMeter is unaffected by buffer size
+            // NOTE: VUMeter is unaffected by buffer size
+            Control::Continue
         })
     }
 
     // Hook to handle JACK sample rate changes
     fn sample_rate(&mut self, _: &Client, srate: Frames) -> Control {
         self.callback_guard(|| {
-            // FIXME: Support sample rate changes properly
             eprintln!("Sample rate is now: {}", srate);
-            unimplemented!()
+            // NOTE: SamplePeakMeter is unaffected by sample rate
+            self.0.loud_meter.update_sampling_rate(srate);
+            Control::Continue
         })
     }
 
