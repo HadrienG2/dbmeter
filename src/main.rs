@@ -73,13 +73,12 @@ fn main() {
     );
 
     // TODO: Do graphics stuff
-    std::thread::sleep_ms(1000);
-    eprintln!("Jack clock at end of last processed frame: {:?} µs",
-              jack_interface.next_time());
-
-    // NOTE: This is how we propagate panics from the audio thread to other
-    //       threads, please run this assertion regularly.
-    assert!(jack_interface.is_alive(), "Audio thread has died");
+    loop {
+        std::thread::sleep_ms(17);
+        assert!(jack_interface.is_alive(), "Audio thread has died");
+        eprintln!("Jack clock at end of last processed frame: {:?} µs",
+                  jack_interface.next_time());
+    }
 }
 
 
@@ -100,6 +99,9 @@ struct JackInterfaceState {
 #[derive(Clone)]
 struct JackInterface(Arc<JackInterfaceState>);
 
+// NOTE: Every public interface function other than is_alive() should feature a
+//       debug assertion that the audio thread is still alive, as a debugging
+//       aid for ill-behaved clients that forget to check it.
 impl JackInterface {
     // Prepare for communication between audio thread and the rest of the world
     fn new(input_port: Port<AudioIn>) -> Self {
@@ -111,12 +113,13 @@ impl JackInterface {
     }
 
     // Check out the JACK input port, we don't really want to hide it
-    fn input_port(&self) -> &Port<AudioIn> {
+    pub fn input_port(&self) -> &Port<AudioIn> {
+        debug_assert!(self.is_alive(), "Audio thread has died.");
         &self.0.input_port
     }
 
-    // Check if the audio thread is alive
-    fn is_alive(&self) -> bool {
+    // Check if the audio thread is still alive, please do this periodically
+    pub fn is_alive(&self) -> bool {
         self.0.alive.load(Ordering::Relaxed)
     }
 
@@ -130,7 +133,8 @@ impl JackInterface {
     // Provides an Acquire barrier so that you can synchronize with any write
     // made during the process() callback. Should be called first by clients.
     //
-    fn next_time(&self) -> Time {
+    pub fn next_time(&self) -> Time {
+        debug_assert!(self.is_alive(), "Audio thread has died.");
         self.0.next_time.load(Ordering::Acquire)
     }
 
@@ -142,7 +146,7 @@ impl JackInterface {
     fn update_time(&self, scope: &ProcessScope) {
         let next_time =
             scope.cycle_times()
-                 .expect("JACK API does not seem to support cycle timing")
+                 .expect("JACK lib does not seem to support cycle timing")
                  .next_usecs;
         self.0.next_time.store(next_time, Ordering::Release);
     }
@@ -184,7 +188,8 @@ impl NotificationHandler for JackInterface {
     // Hook to do initialization before an audio thread starts
     fn thread_init(&self, _: &Client) {
         self.callback_guard(|| {
-            println!("Audio thread {:?} is ready.", std::thread::current().id());
+            println!("Audio thread {:?} is ready.",
+                     std::thread::current().id());
             Control::Continue
         });
     }
